@@ -185,7 +185,7 @@ SnapTranslator.dict.de = {
     'translator_e-mail':
         'jens@moenig.org, jadga.huegle@sap.com', // optional
     'last_changed':
-        '2020-06-06', // this, too, will appear in the Translators tab
+        '2020-11-02', // this, too, will appear in the Translators tab
 
     // GUI
     // control bar:
@@ -491,6 +491,8 @@ SnapTranslator.dict.de = {
         'schreibe %s Größe %n',
     'paste on %spr':
         'drucke auf %spr',
+    'cut from %spr':
+        'schneide aus %spr',
     'pen vectors':
         'Vektor-Malspuren',
 
@@ -742,7 +744,7 @@ SnapTranslator.dict.de = {
     'letter %idx of %s':
         'Zeichen %idx von %s',
     'length of %s':
-        'L\u00e4nge von %s',
+        'L\u00e4nge von Text %s',
     'unicode of %s':
         'Unicode Wert von %s',
     'unicode %n as letter':
@@ -893,8 +895,8 @@ SnapTranslator.dict.de = {
         'zeigt das Projekt als XML\nin einem neuen Browserfenster an',
     'Export blocks...':
         'Bl\u00f6cke exportieren...',
-    'show global custom block definitions as XML\nin a new browser window':
-        'zeigt globale Benutzerblockdefinitionen\nals XML im Browser an',
+    'save global custom block\ndefinitions as XML':
+        'globale Benutzerblockdefinitionen\nals XML-Datei speichern',
     'Unused blocks...':
           'nicht verwendete Bl\u00f6cke...',
     'find unused global custom blocks\nand remove their definitions':
@@ -989,6 +991,8 @@ SnapTranslator.dict.de = {
         'Sprache...',
     'Zoom blocks...':
         'Bl\u00f6cke vergr\u00f6\u00dfern...',
+    'Fade blocks...':
+        'Bl\u00f6cke ausblenden...',
     'Stage size...':
         'B\u00fchnengr\u00f6\u00dfe...',
     'Stage size':
@@ -1170,8 +1174,16 @@ SnapTranslator.dict.de = {
         'eine Kopie aufnehmen',
     'only duplicate this block':
         'nur diesen Block duplizieren',
+    'extract':
+        'herausziehen',
+    'only grab this block':
+        'nur diesen Block bewegen',
     'delete':
         'L\u00f6schen',
+    'senders...':
+        'Sender...',
+    'receivers...':
+        'Empfänger...',
     'script pic...':
         'Skriptbild...',
     'save a picture\nof this script':
@@ -1198,6 +1210,10 @@ SnapTranslator.dict.de = {
         'Blockdefinition l\u00f6schen...',
     'duplicate block definition...':
         'Blockdefinition duplizieren...',
+    'export block definition...':
+        'Blockdefinition exportieren...',
+    'including dependencies':
+        'mit allen verwendeten Blöcken',
     'edit...':
         'Bearbeiten...',
 
@@ -1278,6 +1294,8 @@ SnapTranslator.dict.de = {
         'Exportieren',
     'rename costume':
         'Kost\u00fcm umbenennen',
+    'rename background':
+        'Hintergrund umbenennen',
 
     // sounds
     'Play sound':
@@ -1347,6 +1365,24 @@ SnapTranslator.dict.de = {
         'gigantisch (8x)',
     'monstrous (10x)':
         'ungeheuerlich (10x)',
+
+    // fade blocks
+    'Fade blocks':
+        'Bl\u00f6cke ausblenden',
+    'block-solid (0)':
+        'normal (0)',
+    'medium (50)':
+        'mittel (50)',
+    'light (70)':
+        'leicht (70)',
+    'shimmering (80)':
+        'schimmernd (80)',
+    'elegant (90)':
+        'elegant (90)',
+    'subtle (95)':
+        'angedeutet (95)',
+    'text-only (100)':
+        'nur Text (100)',
 
     // Project Manager
     'Untitled':
@@ -1684,7 +1720,7 @@ SnapTranslator.dict.de = {
     'saturation':
         'Sättigung',
     'brightness':
-        'Helligeit',
+        'Helligkeit',
     'transparency':
         'Transparenz',
     'ghost':
@@ -1880,7 +1916,7 @@ SnapTranslator.dict.de = {
     'other clones':
         'andere Klone',
     'dangling?':
-        'Baumeln?',
+        'baumelnd?',
     'draggable?':
         'greifbar?',
     'rotation style':
@@ -1917,6 +1953,26 @@ SnapTranslator.dict.de = {
         'Rand oben',
     'bottom':
         'Rand unten',
+
+    // attributes in the SET block's dropdown
+    'my anchor':
+        'Attribut Verankerung',
+    'my parent':
+        'Attribut Vorfahr',
+    'my name':
+        'Attribut Name',
+    'my temporary?':
+        'Attribut temporär?',
+    'my dangling?':
+        'Attribut baumelnd?',
+    'my draggable?':
+        'Attribut greifbar?',
+    'my rotation style':
+        'Attribut Drehtyp',
+    'my rotation x':
+        'Attribut Drehpunkt x',
+    'my rotation y':
+        'Attribut Drehpunkt y',
 
     // inheritance
     'inherited':

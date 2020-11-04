@@ -65,6 +65,12 @@
         BoxMorph*
             CommentMorph
             ScriptFocusMorph
+        StringMorph*
+            BlockLabelMorph
+            InputSlotStringMorph
+            InputSlotTextMorph
+        SymbolMorph*
+            BlockSymbolMorph
 
     * from morphic.js
 
@@ -75,6 +81,8 @@
     defined. Use this list to locate code in this document:
 
         SyntaxElementMorph
+        BlockLabelMorph
+        BlockSymbolMorph
         BlockMorph
         CommandBlockMorph
         HatBlockMorph
@@ -86,6 +94,8 @@
         RingCommandSlotMorph
         CSlotMorph
         InputSlotMorph
+        InputSlotStringMorph
+        InputSlotTextMorph
         BooleanSlotMorph
         ArrowMorph
         TextSlotMorph
@@ -141,17 +151,19 @@ String, StringMorph, TextMorph, contains, degrees, detect, PianoMenuMorph,
 document, getDocumentPositionOf, isNaN, isString, newCanvas, nop, parseFloat,
 radians, useBlurredShadows, SpeechBubbleMorph, modules, StageMorph, Sound,
 fontHeight, TableFrameMorph, SpriteMorph, Context, ListWatcherMorph, Rectangle,
-DialogBoxMorph, BlockInputFragmentMorph, PrototypeHatBlockMorph,
-Costume, IDE_Morph, BlockDialogMorph, BlockEditorMorph, localize, isNil,
+DialogBoxMorph, BlockInputFragmentMorph, PrototypeHatBlockMorph, WHITE, BLACK,
+Costume, IDE_Morph, BlockDialogMorph, BlockEditorMorph, localize, isNil, CLEAR,
 isSnapObject, PushButtonMorph, SpriteIconMorph, Process, AlignmentMorph,
 CustomCommandBlockMorph, SymbolMorph, ToggleButtonMorph, DialMorph*/
 
 // Global stuff ////////////////////////////////////////////////////////
 
-modules.blocks = '2020-June-04';
+modules.blocks = '2020-November-02';
 
 var SyntaxElementMorph;
 var BlockMorph;
+var BlockLabelMorph;
+var BlockSymbolMorph;
 var CommandBlockMorph;
 var ReporterBlockMorph;
 var ScriptsMorph;
@@ -159,6 +171,8 @@ var ArgMorph;
 var CommandSlotMorph;
 var CSlotMorph;
 var InputSlotMorph;
+var InputSlotStringMorph;
+var InputSlotTextMorph;
 var BooleanSlotMorph;
 var ArrowMorph;
 var ColorSlotMorph;
@@ -284,6 +298,7 @@ SyntaxElementMorph.prototype.setScale = function (num) {
 
 SyntaxElementMorph.prototype.setScale(1);
 SyntaxElementMorph.prototype.isCachingInputs = false;
+SyntaxElementMorph.prototype.alpha = 1;
 
 // SyntaxElementMorph instance creation:
 
@@ -302,6 +317,7 @@ SyntaxElementMorph.prototype.init = function () {
 
     this.defaults = [];
     this.cachedInputs = null;
+    delete this.alpha;
 };
 
 // SyntaxElementMorph accessing:
@@ -372,6 +388,9 @@ SyntaxElementMorph.prototype.allEmptySlots = function () {
     // to empty input slots
     var empty = [];
     if (!(this instanceof RingMorph) &&
+            // disregard custom C-slots, because they should be treated as
+            // rings. Commented out for now...
+            // !(this instanceof CSlotMorph && !this.isStatic) &&
             (this.selector !== 'reportJSFunction')) {
         this.children.forEach(morph => {
             if (morph.isEmptySlot && morph.isEmptySlot()) {
@@ -440,7 +459,9 @@ SyntaxElementMorph.prototype.replaceInput = function (oldArg, newArg) {
     }
     replacement.parent = this;
     this.children[idx] = replacement;
-    if (oldArg instanceof ReporterBlockMorph && scripts) {
+    if (oldArg instanceof ReporterBlockMorph && scripts &&
+        !oldArg.isPrototype
+    ) {
         if (!(oldArg instanceof RingMorph)
                 || (oldArg instanceof RingMorph && oldArg.contents())) {
             scripts.add(oldArg);
@@ -577,15 +598,15 @@ SyntaxElementMorph.prototype.getVarNamesDict = function () {
             // add settable object attributes
             dict['~'] = null;
             dict.my = [{// wrap the submenu into a 1-item array to translate it
-                'anchor' : ['anchor'],
-                'parent' : ['parent'],
-                'name' : ['name'],
-                'temporary?' : ['temporary?'],
-                'dangling?' : ['dangling?'],
-                'draggable?' : ['draggable?'],
-                'rotation style' : ['rotation style'],
-                'rotation x' : ['rotation x'],
-                'rotation y' : ['rotation y']
+                'anchor' : ['my anchor'],
+                'parent' : ['my parent'],
+                'name' : ['my name'],
+                'temporary?' : ['my temporary?'],
+                'dangling?' : ['my dangling?'],
+                'draggable?' : ['my draggable?'],
+                'rotation style' : ['my rotation style'],
+                'rotation x' : ['my rotation x'],
+                'rotation y' : ['my rotation y']
             }];
             if (this.world().currentKey === 16) { // shift
                 dict.my[0]['~'] = null; // don't forget we're inside an array...
@@ -769,6 +790,15 @@ SyntaxElementMorph.prototype.unflash = function () {
     }
 };
 
+SyntaxElementMorph.prototype.doWithAlpha = function (alpha, callback) {
+    var current = SyntaxElementMorph.prototype.alpha,
+        result;
+    SyntaxElementMorph.prototype.alpha = alpha;
+    result = callback();
+    SyntaxElementMorph.prototype.alpha = current;
+    return result;
+};
+
 // SyntaxElementMorph zebra coloring
 
 SyntaxElementMorph.prototype.fixBlockColor = function (
@@ -878,7 +908,7 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
             break;
         case '%br':
             part = new Morph();
-            part.setExtent(new Point(0, 0));
+            part.setExtent(ZERO);
             part.isBlockLabelBreak = true;
             part.getSpec = () => '%br';
             break;
@@ -925,7 +955,7 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
                 	'§_dir': null,
                     '(90) right' : 90,
                     '(-90) left' : -90,
-                    '(0) up' : '0',
+                    '(0) up' : 0,
                     '(180) down' : 180,
                     'random' : ['random']
                 }
@@ -996,32 +1026,12 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
                 {
                     '22.05 kHz' : 22050,
                     '44.1 kHz' : 44100,
+                    '48 kHz' : 48000,
                     '88.2 kHz' : 88200,
                     '96 kHz' : 96000
                 }
             );
             part.setContents(1);
-            break;
-        case '%month':
-            part = new InputSlotMorph(
-                null, // text
-                false, // numeric?
-                {
-                    'January' : ['January'],
-                    'February' : ['February'],
-                    'March' : ['March'],
-                    'April' : ['April'],
-                    'May' : ['May'],
-                    'June' : ['June'],
-                    'July' : ['July'],
-                    'August' : ['August'],
-                    'September' : ['September'],
-                    'October' : ['October'],
-                    'November' : ['November'],
-                    'December' : ['December']
-                },
-                true // read-only
-            );
             break;
         case '%interaction':
             part = new InputSlotMorph(
@@ -1326,6 +1336,7 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
                     'e^' : ['e^'],
                     '10^' : ['10^'],
                     '2^' : ['2^'],
+                    id: ['id']
                 },
                 true
             );
@@ -1480,18 +1491,6 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
             );
             // part.isStatic = true;
             break;
-        case '%lst':
-            part = new InputSlotMorph(
-                null,
-                false,
-                {
-                    list1 : 'list1',
-                    list2 : 'list2',
-                    list3 : 'list3'
-                },
-                true
-            );
-            break;
         case '%codeKind':
             part = new InputSlotMorph(
                 null,
@@ -1564,12 +1563,13 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
             part.add(this.labelPart('%loopArrow'));
             break;
         case '%loopArrow':
-            part = new SymbolMorph('loop');
+            part = new BlockSymbolMorph('loop');
             part.size = this.fontSize * 0.7;
-            part.color = new Color(255, 255, 255);
+            part.color = WHITE;
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
+            part.isFading = true;
             part.fixLayout();
             break;
         case '%clr':
@@ -1622,91 +1622,91 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
     // symbols:
 
         case '%turtle':
-            part = new SymbolMorph('turtle');
+            part = new BlockSymbolMorph('turtle');
             part.size = this.fontSize * 1.2;
-            part.color = new Color(255, 255, 255);
+            part.color = WHITE;
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%turtleOutline':
-            part = new SymbolMorph('turtleOutline');
+            part = new BlockSymbolMorph('turtleOutline');
             part.size = this.fontSize;
-            part.color = new Color(255, 255, 255);
+            part.color = WHITE;
             part.isProtectedLabel = true; // doesn't participate in zebraing
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%clockwise':
-            part = new SymbolMorph('turnRight');
+            part = new BlockSymbolMorph('turnRight');
             part.size = this.fontSize * 1.5;
-            part.color = new Color(255, 255, 255);
+            part.color = WHITE;
             part.isProtectedLabel = false; // zebra colors
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%counterclockwise':
-            part = new SymbolMorph('turnLeft');
+            part = new BlockSymbolMorph('turnLeft');
             part.size = this.fontSize * 1.5;
-            part.color = new Color(255, 255, 255);
+            part.color = WHITE;
             part.isProtectedLabel = false; // zebra colors
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%greenflag':
-            part = new SymbolMorph('flag');
+            part = new BlockSymbolMorph('flag');
             part.size = this.fontSize * 1.5;
             part.color = new Color(0, 200, 0);
             part.isProtectedLabel = true; // doesn't participate in zebraing
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%stop':
-            part = new SymbolMorph('octagon');
+            part = new BlockSymbolMorph('octagon');
             part.size = this.fontSize * 1.5;
             part.color = new Color(200, 0, 0);
             part.isProtectedLabel = true; // doesn't participate in zebraing
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%pause':
-            part = new SymbolMorph('pause');
+            part = new BlockSymbolMorph('pause');
             part.size = this.fontSize;
             part.color = new Color(255, 220, 0);
             part.isProtectedLabel = true; // doesn't participate in zebraing
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%blitz':
-            part = new SymbolMorph('flash');
+            part = new BlockSymbolMorph('flash');
             part.size = this.fontSize;
-            part.color = new Color(255, 255, 255);
+            part.color = WHITE;
             part.isProtectedLabel = false; // zebra colors
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
         case '%list':
-            part = new SymbolMorph('list');
+            part = new BlockSymbolMorph('list');
             part.size = this.fontSize;
-            part.color = new Color(255, 255, 255);
+            part.color = WHITE;
             part.shadowColor = this.color.darker(this.labelContrast);
             part.shadowOffset = MorphicPreferences.isFlat ?
-                    new Point() : this.embossing;
+                    ZERO : this.embossing;
             part.fixLayout();
             break;
 
@@ -1753,7 +1753,7 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
             part.fontStyle = this.labelFontStyle;
             part.fontSize = this.fontSize * (+tokens[1] || 1);
         } else {
-            part = new SymbolMorph(tokens[0]);
+            part = new BlockSymbolMorph(tokens[0]);
             part.size = this.fontSize * (+tokens[1] || 1.2);
         }
         part.color = new Color(
@@ -1764,10 +1764,10 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
         part.isProtectedLabel = tokens.length > 2; // zebra colors
         part.shadowColor = this.color.darker(this.labelContrast);
         part.shadowOffset = MorphicPreferences.isFlat ?
-                new Point() : this.embossing;
+                ZERO : this.embossing;
         part.fixLayout();
     } else {
-        part = new StringMorph(
+        part = new BlockLabelMorph(
             spec, // text
             this.fontSize, // fontSize
             this.labelFontStyle, // fontStyle
@@ -1775,11 +1775,12 @@ SyntaxElementMorph.prototype.labelPart = function (spec) {
             false, // italic
             false, // isNumeric
             MorphicPreferences.isFlat ?
-                    new Point() : this.embossing, // shadowOffset
+                    ZERO : this.embossing, // shadowOffset
             this.color.darker(this.labelContrast), // shadowColor
-            new Color(255, 255, 255), // color
+            WHITE, // color
             this.labelFontName // fontName
         );
+
     }
     return part;
 };
@@ -1803,7 +1804,6 @@ SyntaxElementMorph.prototype.fixLayout = function () {
         maxX = 0,
         blockWidth = this.minWidth,
         blockHeight,
-        affected,
         l = [],
         lines = [],
         space = this.isPrototype ?
@@ -1812,8 +1812,7 @@ SyntaxElementMorph.prototype.fixLayout = function () {
         	this.methodIconExtent().x + space : 0,
         bottomCorrection,
         hasLoopCSlot = false,
-        hasLoopArrow = false,
-        initialExtent = this.extent();
+        hasLoopArrow = false;
 
     if ((this instanceof MultiArgMorph) && (this.slotSpec !== '%cs')) {
         blockWidth += this.arrows().width();
@@ -2054,35 +2053,14 @@ SyntaxElementMorph.prototype.fixLayout = function () {
     }
 
     // find out if one of my parents needs to be fixed
-    if (this instanceof CommandBlockMorph) {
-        if (this.height() !== initialExtent.y) {
-            affected = this.parentThatIsA(CommandSlotMorph, ReporterSlotMorph);
-            if (affected) {
-                affected.fixLayout();
-            }
-        }
-        if (this.width() !== initialExtent.x) {
-            affected = this.parentThatIsA(
-                ReporterBlockMorph,
-                CommandSlotMorph,
-                RingCommandSlotMorph,
-                ReporterSlotMorph
-            );
-            if (affected) {
-                affected.fixLayout();
-            }
-        }
-        if (affected) {
-            return;
-        }
-    } else if (this instanceof ReporterBlockMorph) {
-        if (this.parent && this.parent.fixLayout) {
-            this.parent.fixLayout();
-            this.parent.changed();
+    if (this instanceof BlockMorph && this.parent && this.parent.fixLayout) {
+        this.parent.fixLayout();
+        this.parent.changed();
+        if (this.parent instanceof SyntaxElementMorph) {
             return;
         }
     }
-
+    
     this.fixHighlight();
 };
 
@@ -2288,6 +2266,117 @@ SyntaxElementMorph.prototype.mappedCode = function (definitions) {
     return result;
 };
 
+// BlockLabelMorph ///////////////////////////////////////////////
+
+/*
+    I am a piece of single-line text written on a block. I serve as a
+    container for sharing typographic attributes among my instances
+*/
+
+// BlockLabelMorph inherits from StringMorph:
+
+BlockLabelMorph.prototype = new StringMorph();
+BlockLabelMorph.prototype.constructor = BlockLabelMorph;
+BlockLabelMorph.uber = StringMorph.prototype;
+
+function BlockLabelMorph(
+    text,
+    fontSize,
+    fontStyle,
+    bold,
+    italic,
+    isNumeric,
+    shadowOffset,
+    shadowColor,
+    color,
+    fontName
+) {
+    this.init(
+        text,
+        fontSize,
+        fontStyle,
+        bold,
+        italic,
+        isNumeric,
+        shadowOffset,
+        shadowColor,
+        color,
+        fontName
+    );
+}
+BlockLabelMorph.prototype.getRenderColor = function () {
+    var block = this.parentThatIsA(BlockMorph);
+    if (MorphicPreferences.isFlat) {
+        return block.alpha > 0.5 ? this.color
+            : block.color.solid().darker(Math.max(block.alpha * 200, 0.1));
+    }
+    return block.alpha > 0.5 ? this.color
+        : block.color.solid().lighter(Math.max(block.alpha * 200, 0.1));
+
+};
+
+BlockLabelMorph.prototype.getShadowRenderColor = function () {
+    return this.parentThatIsA(BlockMorph).alpha > 0.5 ?
+        this.shadowColor
+            : CLEAR;
+};
+
+// BlockSymbolMorph //////////////////////////////////////////////////////////
+
+/*
+    I am a pictogram written on a block. I serve as a
+    container for sharing typographic attributes among my instances.
+    NOTE: I have an additional attribute ".isFading" that governs
+    my behavior when fading out the blocks I'm embedded in
+*/
+
+// BlockSymbolMorph inherits from SymbolMorph:
+
+BlockSymbolMorph.prototype = new SymbolMorph();
+BlockSymbolMorph.prototype.constructor = BlockSymbolMorph;
+BlockSymbolMorph.uber = SymbolMorph.prototype;
+
+function BlockSymbolMorph(name, size, color, shadowOffset, shadowColor) {
+    this.init(name, size, color, shadowOffset, shadowColor);
+}
+
+BlockSymbolMorph.prototype.getRenderColor = function () {
+    var block = this.parentThatIsA(BlockMorph);
+    if (MorphicPreferences.isFlat) {
+        if (this.isFading) {
+            return this.color.mixed(block.alpha, WHITE);
+        }
+        if (this.color.eq(WHITE)) {
+            return this.parent.alpha > 0.5 ? this.color
+                : block.color.solid().darker(Math.max(block.alpha * 200, 0.1));
+        }
+        if (this.color.eq(BLACK)) {
+            return this.parent.alpha > 0.5 ? this.color
+                : block.color.solid().darker(Math.max(block.alpha * 200, 0.1));
+        }
+        return this.color;
+    }
+    if (this.isFading) {
+        return this.color.mixed(
+            block.alpha,
+            SpriteMorph.prototype.paletteColor
+        );
+    }
+    if (this.color.eq(BLACK)) {
+        return block.alpha > 0.5 ? this.color
+            : block.color.solid().lighter(Math.max(block.alpha * 200, 0.1));
+    }
+    if (this.color.eq(WHITE)) {
+        return this.parent.alpha > 0.5 ? this.color
+            : block.color.solid().lighter(Math.max(block.alpha * 200, 0.1));
+    }
+    return this.color;
+};
+
+BlockSymbolMorph.prototype.getShadowRenderColor = function () {
+    return this.parent.alpha > 0.5 ? this.shadowColor : CLEAR;
+};
+
 // BlockMorph //////////////////////////////////////////////////////////
 
 /*
@@ -2357,7 +2446,6 @@ SyntaxElementMorph.prototype.mappedCode = function (definitions) {
     %typ    - chameleon colored rectangular drop-down for data types
     %var    - chameleon colored rectangular drop-down for variable names
     %shd    - Chameleon colored rectuangular drop-down for shadowed var names
-    %lst    - chameleon colored rectangular drop-down for list names
     %b      - chameleon colored hexagonal slot (for predicates)
     %bool   - chameleon colored hexagonal slot (for predicates), static
     %l      - list icon
@@ -2615,6 +2703,7 @@ BlockMorph.prototype.userMenu = function () {
     var menu = new MenuMorph(this),
         world = this.world(),
         myself = this,
+        hasLine = false,
         shiftClicked = world.currentKey === 16,
         proc = this.activeProcess(),
         top = this.topBlock(),
@@ -2652,7 +2741,7 @@ BlockMorph.prototype.userMenu = function () {
             "Variable name",
             myself.blockSpec,
             world,
-            blck.fullImage(), // pic
+            blck.doWithAlpha(1, () => blck.fullImage()), // pic
             InputSlotMorph.prototype.getVarNamesDict.call(myself)
         );
     }
@@ -2900,11 +2989,45 @@ BlockMorph.prototype.userMenu = function () {
             },
             'only duplicate this block'
         );
+        menu.addItem(
+            'extract',
+            'userExtractJustThis',
+            'only grab this block'
+        );
     }
     menu.addItem(
         "delete",
         'userDestroy'
     );
+    if (isNil(this.comment)) {
+        menu.addItem(
+            "add comment",
+            () => {
+                var comment = new CommentMorph();
+                this.comment = comment;
+                comment.block = this;
+                comment.layoutChanged();
+
+                // Simulate drag/drop for better undo/redo behavior
+                var scripts = this.parentThatIsA(ScriptsMorph),
+                    ide = this.parentThatIsA(IDE_Morph),
+                    blockEditor = this.parentThatIsA(BlockEditorMorph);
+                if (!ide && blockEditor) {
+                    ide = blockEditor.target.parentThatIsA(IDE_Morph);
+                }
+                if (ide) {
+                    world.hand.grabOrigin = {
+                        origin: ide.palette,
+                        position: ide.palette.center()
+                    };
+                }
+                scripts.clearDropInfo();
+                scripts.lastDropTarget = { element: this };
+                scripts.lastDroppedBlock = comment;
+                scripts.recordDrop(world.hand.grabOrigin);
+            }
+        );
+    }
     menu.addItem(
         "script pic...",
         () => {
@@ -2920,7 +3043,10 @@ BlockMorph.prototype.userMenu = function () {
         },
         'save a picture\nof this script'
     );
-    if (top instanceof ReporterBlockMorph) {
+    if (top instanceof ReporterBlockMorph ||
+        (!(top instanceof PrototypeHatBlockMorph) &&
+            top.allChildren().some((any) => any.selector === 'doReport'))
+    ) {
         menu.addItem(
             "result pic...",
             () => top.exportResultPic(),
@@ -2976,6 +3102,19 @@ BlockMorph.prototype.userMenu = function () {
         }
         return menu;
     }
+    if (contains(
+        ['doBroadcast', 'doSend', 'doBroadcastAndWait', 'receiveMessage',
+            'receiveOnClone', 'receiveGo'],
+        this.selector
+    )) {
+        hasLine = true;
+        menu.addLine();
+        menu.addItem(
+            (this.selector.indexOf('receive') === 0 ?
+                "senders..." : "receivers..."),
+            'showMessageUsers'
+        );
+    }
     if (this.parent instanceof ReporterSlotMorph
             || (this.parent instanceof CommandSlotMorph)
             || (this instanceof HatBlockMorph)
@@ -2983,7 +3122,7 @@ BlockMorph.prototype.userMenu = function () {
                 && (top instanceof HatBlockMorph))) {
         return menu;
     }
-    menu.addLine();
+    if (!hasLine) {menu.addLine(); }
     menu.addItem("ringify", 'ringify');
     if (StageMorph.prototype.enableCodeMapping) {
         menu.addLine();
@@ -2997,6 +3136,83 @@ BlockMorph.prototype.userMenu = function () {
         );
     }
     return menu;
+};
+
+BlockMorph.prototype.showMessageUsers = function () {
+    var ide = this.parentThatIsA(IDE_Morph) ||
+            this.parentThatIsA(BlockEditorMorph)
+                .target.parentThatIsA(IDE_Morph),
+        corral = ide.corral,
+        getter = (this.selector.indexOf('receive') === 0) ?
+            'allSendersOf' : 'allHatBlocksFor',
+        inputs = this.inputs(),
+        message, receiverName, knownSenders;
+
+    if (this.selector === 'receiveGo') {
+        message = '__shout__go__';
+    } else if (this.selector === 'receiveOnClone') {
+        message = '__clone__init__';
+    } else if (inputs[0] instanceof InputSlotMorph) {
+        message = inputs[0].evaluate();
+    }
+
+    if (((this.selector === 'doSend') && inputs[1] instanceof InputSlotMorph)) {
+        receiverName = this.inputs()[1].evaluate();
+    } else if (this.selector.indexOf('receive') === 0) {
+        receiverName = this.scriptTarget().name;
+    }
+
+    if (message !== '') {
+        if (getter === 'allSendersOf') {
+            knownSenders = ide.stage.globalBlocksSending(message, receiverName);
+        }
+        corral.frame.contents.children.concat(corral.stageIcon).forEach(
+            icon => {
+                if (icon.object &&
+                    ((this.selector !== 'doSend' ||
+                        receiverName === icon.object.name) &&
+                    (icon.object[getter](
+                        message,
+                        receiverName,
+                        knownSenders
+                    ).length > 0))
+                ) {
+                    icon.flash();
+                }
+            }
+        );
+    }
+};
+
+BlockMorph.prototype.isSending = function (message, receiverName, known = []) {
+    if (typeof message === 'number') {
+        message = message.toString();
+    }
+    return this.allChildren().some(morph => {
+        var event, eventReceiver;
+        if (morph.isCustomBlock &&
+                morph.isGlobal &&
+                    contains(known, morph.definition)
+        ) {
+            return true;
+        }
+        if ((morph.selector) &&
+                contains(
+                    ['doBroadcast', 'doBroadcastAndWait', 'doSend'],
+                    morph.selector)
+        ) {
+            event = morph.inputs()[0].evaluate();
+            if (morph.selector === 'doSend') {
+                eventReceiver = morph.inputs()[1].evaluate();
+            }
+            return ((morph.selector !== 'doSend') ||
+                    (receiverName === eventReceiver)) &&
+                ((event === message) ||
+                    (message instanceof Array &&
+                        message[0] === 'any message'));
+        }
+        return false;
+    });
 };
 
 BlockMorph.prototype.developersMenu = function () {
@@ -3173,6 +3389,10 @@ BlockMorph.prototype.unringify = function () {
 };
 
 BlockMorph.prototype.relabel = function (alternativeSelectors) {
+    // morph one block into another trying to keep the inputs in place
+    // alternative Selector can either be a string representing
+    // a block selector or a 2-item array containing a string and
+    // an integer offset for restoring inputs
     var menu, oldInputs,
         target = this.selectForEdit(); // copy-on-edit
     if (target !== this) {
@@ -3180,14 +3400,22 @@ BlockMorph.prototype.relabel = function (alternativeSelectors) {
     }
     menu = new MenuMorph(this);
     oldInputs = this.inputs();
-    alternativeSelectors.forEach(sel => {
-        var block = SpriteMorph.prototype.blockForSelector(sel);
-        block.restoreInputs(oldInputs);
+    alternativeSelectors.forEach(alternative => {
+        var block, selector, offset;
+        if (alternative instanceof Array) {
+            selector = alternative[0];
+            offset = -alternative[1];
+        } else {
+            selector = alternative;
+            offset = 0;
+        }
+        block = SpriteMorph.prototype.blockForSelector(selector, true);
+        block.restoreInputs(oldInputs, offset);
         block.fixBlockColor(null, true);
         block.addShadow(new Point(3, 3));
         menu.addItem(
-            block.fullImage(),
-            () => this.setSelector(sel)
+            block.doWithAlpha(1, () => block.fullImage()),
+            () => this.setSelector(selector, -offset)
         );
     });
     menu.popup(this.world(), this.bottomLeft().subtract(new Point(
@@ -3196,17 +3424,38 @@ BlockMorph.prototype.relabel = function (alternativeSelectors) {
     )));
 };
 
-BlockMorph.prototype.setSelector = function (aSelector) {
+
+BlockMorph.prototype.setSelector = function (aSelector, inputOffset = 0) {
     // private - used only for relabel()
+    // input offset is optional and can be used to shift the inputs
+    // to be restored
     var oldInputs = this.inputs(),
         scripts = this.parentThatIsA(ScriptsMorph),
         surplus,
-        info;
+        info,
+        slots,
+        i;
     info = SpriteMorph.prototype.blocks[aSelector];
     this.setCategory(info.category);
     this.selector = aSelector;
     this.setSpec(localize(info.spec));
-    surplus = this.restoreInputs(oldInputs);
+    this.defaults = info.defaults || [];
+
+    // restore default values
+    slots = this.inputs();
+    if (slots[0] instanceof MultiArgMorph) {
+        slots[0].setContents(this.defaults);
+        slots[0].defaults = this.defaults;
+    } else {
+        for (i = 0; i < this.defaults.length; i += 1) {
+            if (this.defaults[i] !== null && slots[i].setContents) {
+                slots[i].setContents(this.defaults[i]);
+            }
+        }
+    }
+
+    // restore previous inputs
+    surplus = this.restoreInputs(oldInputs, -inputOffset);
     this.fixLabelColor();
 
     // place surplus blocks on scipts
@@ -3218,19 +3467,42 @@ BlockMorph.prototype.setSelector = function (aSelector) {
     }
 };
 
-BlockMorph.prototype.restoreInputs = function (oldInputs) {
+BlockMorph.prototype.restoreInputs = function (oldInputs, offset = 0) {
     // private - used only for relabel()
     // try to restore my previous inputs when my spec has been changed
     // return an Array of left-over blocks, if any
-    var i = 0,
-        old,
-        nb,
+    // optional offset parameter allows for shifting the range
+    // of inputs to be restored
+    var old, nb, i,
         leftOver = [];
 
-    this.inputs().forEach(inp => {
+    // gather leading surplus blocks
+    for (i = 0; i < offset; i += 1) {
         old = oldInputs[i];
         if (old instanceof ReporterBlockMorph) {
-            this.replaceInput(inp, old.fullCopy());
+            leftOver.push(old);
+        } else if (old instanceof CommandSlotMorph) {
+            nb = old.nestedBlock();
+            if (nb) {
+                leftOver.push(nb);
+            }
+        }
+    }
+
+    // restore matching inputs in their original order
+    this.inputs().forEach(inp => {
+        old = oldInputs[offset];
+        if (old instanceof RingMorph) {
+            if (old.contents()) {
+                this.replaceInput(inp, old.fullCopy());
+            }
+            // otherwise ignore the empty ring
+        } else if (old instanceof ReporterBlockMorph) {
+            if (inp instanceof TemplateSlotMorph || inp.isStatic) {
+                leftOver.push(old);
+            } else {
+                this.replaceInput(inp, old.fullCopy());
+            }
         } else if (old && inp instanceof InputSlotMorph) {
             // original - turns empty numberslots to 0:
             // inp.setContents(old.evaluate());
@@ -3247,12 +3519,12 @@ BlockMorph.prototype.restoreInputs = function (oldInputs) {
                 inp.nestedBlock(nb.fullCopy());
             }
         }
-        i += 1;
+        offset += 1;
     });
 
-    // gather surplus blocks
-    for (i; i < oldInputs.length; i += 1) {
-        old = oldInputs[i];
+    // gather trailing surplus blocks
+    for (offset; offset < oldInputs.length; offset += 1) {
+        old = oldInputs[offset];
         if (old instanceof ReporterBlockMorph) {
             leftOver.push(old);
         } else if (old instanceof CommandSlotMorph) {
@@ -3314,7 +3586,6 @@ BlockMorph.prototype.showHelp = function () {
         if (comment) {
             block = def.blockInstance();
             block.refreshDefaults(def);
-            block.addShadow();
             comment = comment.fullCopy();
             comment.contents.parse();
             help = '';
@@ -3325,12 +3596,34 @@ BlockMorph.prototype.showHelp = function () {
                 'Help',
                 help.substr(1),
                 myself.world(),
-                block.fullImage()
+                block.doWithAlpha(
+                    1,
+                    () => {
+                        block.addShadow();
+                        return block.fullImage();
+                    }
+                )
             );
             return;
         }
     }
     pic.src = ide.resourceURL('help', spec + '.png');
+};
+
+// BlockMorph exporting picture with result bubble
+
+BlockMorph.prototype.exportResultPic = function () {
+    var top = this.topBlock(),
+        receiver = top.scriptTarget(),
+        stage;
+    if (top !== this) {return; }
+    if (receiver) {
+        stage = receiver.parentThatIsA(StageMorph);
+        if (stage) {
+            stage.threads.stopProcess(top);
+            stage.threads.startProcess(top, receiver, false, true);
+        }
+    }
 };
 
 // BlockMorph code mapping
@@ -3349,7 +3642,7 @@ BlockMorph.prototype.mapToHeader = function () {
         help,
         pic;
     block.addShadow(new Point(3, 3));
-    pic = block.fullImage();
+    pic = block.doWithAlpha(1, () => block.fullImage());
     if (this.isCustomBlock) {
         help = 'Enter code that corresponds to the block\'s definition. ' +
             'Use the formal parameter\nnames as shown and <body> to ' +
@@ -3386,7 +3679,7 @@ BlockMorph.prototype.mapToCode = function () {
         block = this.codeMappingHeader(),
         pic;
     block.addShadow(new Point(3, 3));
-    pic = block.fullImage();
+    pic = block.doWithAlpha(1, () => block.fullImage());
     new DialogBoxMorph(
         this,
         code => {
@@ -3591,7 +3884,7 @@ BlockMorph.prototype.refactorThisVar = function (justTheTemplate) {
         'Variable name',
         oldName,
         this.world(),
-        cpy.fullImage(), // pic
+        cpy.doWithAlpha(1, () => cpy.fullImage()), // pic
         InputSlotMorph.prototype.getVarNamesDict.call(this)
     );
 
@@ -3875,6 +4168,7 @@ BlockMorph.prototype.scriptPic = function () {
         fb = this.stackFullBounds(),
         pic = newCanvas(fb.extent()),
         ctx = pic.getContext('2d');
+
     this.allComments().forEach(comment =>
         ctx.drawImage(
             comment.fullImage(),
@@ -3884,6 +4178,40 @@ BlockMorph.prototype.scriptPic = function () {
     );
     ctx.drawImage(scr, 0, 0);
     return pic;
+};
+
+BlockMorph.prototype.fullImage = function () {
+    // answer a canvas image meant for (semi-) transparent blocks
+    // that lets the background shine through
+    var src, solid, pic, ctx;
+
+    if (this.alpha === 1) {
+        return BlockMorph.uber.fullImage.call(this);
+    }
+    this.forAllChildren(m => {
+        if (m instanceof BlockMorph) {
+            m.mouseLeaveBounds();
+        }
+    });
+    src = BlockMorph.uber.fullImage.call(this);
+    solid = this.doWithAlpha(1, () => BlockMorph.uber.fullImage.call(this));
+    pic = newCanvas(this.fullBounds().extent());
+    ctx = pic.getContext('2d');
+    ctx.fillStyle = ScriptsMorph.prototype.getRenderColor().toString();
+    ctx.fillRect(0, 0, pic.width, pic.height);
+    ctx.globalCompositeOperation = 'destination-in';
+    ctx.drawImage(solid, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.drawImage(src, 0, 0);
+    return pic;
+};
+
+BlockMorph.prototype.clearAlpha = function () {
+    this.forAllChildren(m => {
+        if (m instanceof BlockMorph) {
+            delete m.alpha;
+        }
+    });
 };
 
 // BlockMorph drawing
@@ -3985,6 +4313,9 @@ BlockMorph.prototype.addHighlight = function (oldHighlight) {
         highlight;
 
     if (isHidden) {this.show(); }
+    if (SyntaxElementMorph.prototype.alpha < 1) {
+        this.clearAlpha();
+    }
     highlight = this.highlight(
         oldHighlight ? oldHighlight.color : this.activeHighlight,
         this.activeBlur,
@@ -4036,6 +4367,7 @@ BlockMorph.prototype.highlight = function (color, blur, border) {
         edge = useBlurredShadows && !MorphicPreferences.isFlat ?
                 blur : border;
     highlight.bounds.setExtent(fb.extent().add(edge * 2));
+    highlight.holes = [highlight.bounds]; // make the highlight untouchable
     highlight.color = color;
     highlight.cachedImage = useBlurredShadows && !MorphicPreferences.isFlat ?
             this.highlightImageBlurred(color, blur)
@@ -4047,7 +4379,7 @@ BlockMorph.prototype.highlight = function (color, blur, border) {
 BlockMorph.prototype.highlightImage = function (color, border) {
     var fb, img, hi, ctx, out;
     fb = this.fullBounds().extent();
-    img = this.fullImage();
+    this.doWithAlpha(1, () => img = this.fullImage());
 
     hi = newCanvas(fb.add(border * 2));
     ctx = hi.getContext('2d');
@@ -4077,7 +4409,7 @@ BlockMorph.prototype.highlightImage = function (color, border) {
 BlockMorph.prototype.highlightImageBlurred = function (color, blur) {
     var fb, img, hi, ctx;
     fb = this.fullBounds().extent();
-    img = this.fullImage();
+    this.doWithAlpha(1, () => img = this.fullImage());
 
     hi = newCanvas(fb.add(blur * 2));
     ctx = hi.getContext('2d');
@@ -4164,7 +4496,7 @@ BlockMorph.prototype.forceNormalColoring = function () {
     var clr = SpriteMorph.prototype.blockColor[this.category];
     this.setColor(clr);
     this.setLabelColor(
-        new Color(255, 255, 255),
+        WHITE,
         clr.darker(this.labelContrast),
         MorphicPreferences.isFlat ? ZERO : this.embossing
     );
@@ -4198,13 +4530,13 @@ BlockMorph.prototype.fixLabelColor = function () {
         var clr = SpriteMorph.prototype.blockColor[this.category];
         if (this.color.eq(clr)) {
             this.setLabelColor(
-                new Color(255, 255, 255),
+                WHITE,
                 clr.darker(this.labelContrast),
                 MorphicPreferences.isFlat ? null : this.embossing
             );
         } else {
             this.setLabelColor(
-                new Color(0, 0, 0),
+                BLACK,
                 clr.lighter(this.zebraContrast)
                     .lighter(this.labelContrast * 2),
                 MorphicPreferences.isFlat ? null : this.embossing.neg()
@@ -4337,6 +4669,20 @@ BlockMorph.prototype.activeProcess = function () {
     return null;
 };
 
+BlockMorph.prototype.mouseEnterBounds = function (dragged) {
+    if (!dragged && this.alpha < 1) {
+        this.alpha = Math.min(this.alpha + 0.2, 1);
+        this.rerender();
+    }
+};
+
+BlockMorph.prototype.mouseLeaveBounds = function (dragged) {
+    if (SyntaxElementMorph.prototype.alpha < 1) {
+        delete this.alpha;
+        this.rerender();
+    }
+};
+
 // BlockMorph dragging and dropping
 
 BlockMorph.prototype.rootForGrab = function () {
@@ -4367,6 +4713,10 @@ BlockMorph.prototype.reactToDropOf = function (droppedMorph) {
 BlockMorph.prototype.situation = function () {
     // answer a dictionary specifying where I am right now, so
     // I can slide back to it if I'm dropped somewhere else
+    // NOTE: We can also add more key-value pairs to the situation
+    // dictionary to support non-standard modes of user-interaction,
+    // such as extracting single commands from within a stack
+    // see recordDrop() and userExtractJustThis()
     if (!(this.parent instanceof TemplateSlotMorph)) {
         var scripts = this.parentThatIsA(ScriptsMorph);
         if (scripts) {
@@ -4392,7 +4742,7 @@ BlockMorph.prototype.prepareToBeGrabbed = function (hand) {
 };
 
 BlockMorph.prototype.justDropped = function () {
-    this.alpha = 1;
+    delete this.alpha;
     this.allComments().forEach(comment =>
         comment.stopFollowing()
     );
@@ -4811,6 +5161,14 @@ CommandBlockMorph.prototype.snap = function (hand) {
 };
 
 CommandBlockMorph.prototype.prepareToBeGrabbed = function (handMorph) {
+    // check whether the shift-key is held down and if I can be "extracted"
+    if (handMorph && handMorph.world.currentKey === 16 && this.nextBlock()) {
+        this.extract(); // NOTE: no infinite recursion, because extract()
+                        // doesn't call this again with a hand
+        handMorph.grabOrigin.action = 'extract'; // ???
+        return;
+    }
+
     var oldPos = this.position();
 
     if (this.parent instanceof RingReporterSlotMorph) {
@@ -4877,13 +5235,7 @@ CommandBlockMorph.prototype.userDestroy = function () {
 CommandBlockMorph.prototype.userDestroyJustThis = function () {
     // delete just this one block, reattach next block to the previous one,
     var scripts = this.parentThatIsA(ScriptsMorph),
-        ide = this.parentThatIsA(IDE_Morph),
-        cs = this.parentThatIsA(CommandSlotMorph, RingReporterSlotMorph),
-        pb,
-        nb = this.nextBlock(),
-        above,
-        parent = this.parentThatIsA(SyntaxElementMorph),
-        cslot = this.parentThatIsA(CSlotMorph, RingReporterSlotMorph);
+        nb = this.nextBlock();
 
     // for undrop / redrop
     if (scripts) {
@@ -4893,6 +5245,30 @@ CommandBlockMorph.prototype.userDestroyJustThis = function () {
         scripts.dropRecord.lastNextBlock = nb;
         scripts.dropRecord.action = 'delete';
     }
+
+    this.extract();
+};
+
+CommandBlockMorph.prototype.userExtractJustThis = function () {
+    // extract just this one block, reattach next block to the previous one,
+    var situation = this.situation();
+    situation.action = "extract"; // record how this block was retrieved
+    this.extract();
+    this.pickUp(situation.origin.world());
+    this.parent.grabOrigin = situation;
+};
+
+CommandBlockMorph.prototype.extract = function () {
+    // private: extract just this one block
+    // reattach next block to the previous one,
+    var scripts = this.parentThatIsA(ScriptsMorph),
+        ide = this.parentThatIsA(IDE_Morph),
+        cs = this.parentThatIsA(CommandSlotMorph, RingReporterSlotMorph),
+        pb,
+        nb = this.nextBlock(),
+        above,
+        parent = this.parentThatIsA(SyntaxElementMorph),
+        cslot = this.parentThatIsA(CSlotMorph, RingReporterSlotMorph);
 
     this.topBlock().fullChanged();
     if (this.parent) {
@@ -5566,7 +5942,7 @@ ReporterBlockMorph.prototype.prepareToBeGrabbed = function (handMorph) {
         this.setPosition(oldPos);
     }
     ReporterBlockMorph.uber.prepareToBeGrabbed.call(this, handMorph);
-    this.alpha = 0.85;
+    handMorph.alpha = this.alpha < 1 ? 1 : 0.85;
     this.cachedSlotSpec = null;
 };
 
@@ -5665,22 +6041,6 @@ ReporterBlockMorph.prototype.mouseClickLeft = function (pos) {
         );
     } else {
         ReporterBlockMorph.uber.mouseClickLeft.call(this, pos);
-    }
-};
-
-// ReporterBlock exporting picture with result bubble
-
-ReporterBlockMorph.prototype.exportResultPic = function () {
-    var top = this.topBlock(),
-        receiver = top.scriptTarget(),
-        stage;
-    if (top !== this) {return; }
-    if (receiver) {
-        stage = receiver.parentThatIsA(StageMorph);
-        if (stage) {
-            stage.threads.stopProcess(top);
-            stage.threads.startProcess(top, receiver, false, true);
-        }
     }
 };
 
@@ -5810,7 +6170,7 @@ ReporterBlockMorph.prototype.drawEdges = function (ctx) {
 ReporterBlockMorph.prototype.drawEdgesOval = function (ctx) {
     // add 3D-Effect
     var h = this.height(),
-        r = Math.min(this.rounding, h / 2),
+        r = Math.max(Math.min(this.rounding, h / 2), this.edge),
         w = this.width(),
         shift = this.edge / 2,
         y,
@@ -6159,7 +6519,6 @@ function RingMorph() {
 RingMorph.prototype.init = function () {
     RingMorph.uber.init.call(this);
     this.category = 'other';
-    this.alpha = RingMorph.prototype.alpha;
     this.contrast = RingMorph.prototype.contrast;
     this.setExtent(new Point(200, 80));
 };
@@ -6352,7 +6711,7 @@ ScriptsMorph.prototype.cleanUpSpacing = 15;
 ScriptsMorph.prototype.isPreferringEmptySlots = true;
 ScriptsMorph.prototype.enableKeyboard = true;
 ScriptsMorph.prototype.enableNestedAutoWrapping = true;
-ScriptsMorph.prototype.feedbackColor = new Color(255, 255, 255);
+ScriptsMorph.prototype.feedbackColor = WHITE;
 
 // ScriptsMorph instance creation:
 
@@ -6407,6 +6766,36 @@ ScriptsMorph.prototype.fullCopy = function () {
     });
     cpy.adjustBounds();
     return cpy;
+};
+
+// ScriptsMorph rendering:
+
+ScriptsMorph.prototype.render = function (aContext) {
+    aContext.fillStyle = this.getRenderColor().toString();
+    aContext.fillRect(0, 0, this.width(), this.height());
+    if (this.cachedTexture) {
+        this.renderCachedTexture(aContext);
+    } else if (this.texture) {
+        this.renderTexture(this.texture, aContext);
+    }
+};
+
+ScriptsMorph.prototype.getRenderColor = function () {
+    if (MorphicPreferences.isFlat ||
+            SyntaxElementMorph.prototype.alpha > 0.85) {
+        return this.color;
+    }
+    return this.color.mixed(
+        Math.max(SyntaxElementMorph.prototype.alpha - 0.15, 0),
+        SpriteMorph.prototype.paletteColor
+    );
+};
+
+ScriptsMorph.prototype.renderCachedTexture = function (ctx) {
+    // support blocks-to-text slider
+    if (SyntaxElementMorph.prototype.alpha > 0.8) {
+        ScriptsMorph.uber.renderCachedTexture.call(this, ctx);
+    }
 };
 
 // ScriptsMorph stepping:
@@ -6931,6 +7320,9 @@ ScriptsMorph.prototype.redrop = function () {
         this.updateToolbar();
     } else {
         this.isAnimating = true;
+        if (this.dropRecord.action === 'extract') {
+            this.dropRecord.lastDroppedBlock.extract();
+        }
         this.dropRecord.lastDroppedBlock.slideBackTo(
             this.dropRecord.situation,
             null,
@@ -7021,10 +7413,17 @@ ScriptsMorph.prototype.recoverLastDrop = function (forRedrop) {
         }
     } else if (dropped instanceof ReporterBlockMorph) {
         if (rec.lastDropTarget) {
-            rec.lastDropTarget.replaceInput(
-                rec.lastDroppedBlock,
-                rec.lastReplacedInput
-            );
+            if (forRedrop) {
+                rec.lastDropTarget.replaceInput(
+                    rec.lastReplacedInput,
+                    rec.lastDroppedBlock
+                );
+            } else {
+                rec.lastDropTarget.replaceInput(
+                    rec.lastDroppedBlock,
+                    rec.lastReplacedInput
+                );
+            }
             rec.lastDropTarget.fixBlockColor(null, true);
             if (rec.lastPreservedBlocks) {
                 rec.lastPreservedBlocks.forEach(morph =>
@@ -7089,7 +7488,10 @@ ScriptsMorph.prototype.recordDrop = function (lastGrabOrigin) {
         lastNextBlock: this.lastNextBlock,
         lastWrapParent: this.lastWrapParent,
         lastOrigin: lastGrabOrigin,
-        action: null,
+
+        // for special gestures, e.g. deleting or extracting single commands:
+        action: lastGrabOrigin ? lastGrabOrigin.action || null : null,
+
         situation: null,
         lastRecord: this.dropRecord,
         nextRecord: null
@@ -7318,7 +7720,7 @@ ScriptsMorph.prototype.scriptTarget = function () {
     if (editor) {
         return editor.target;
     }
-    throw new Error('script target bannot be found for orphaned scripts');
+    throw new Error('script target cannot be found for orphaned scripts');
 };
 
 
@@ -7353,6 +7755,9 @@ ArgMorph.prototype.init = function (type) {
     ArgMorph.uber.init.call(this);
     this.color = new Color(0, 17, 173);
     this.createIcon();
+    if (type === 'list') {
+        this.alpha = 1;
+    }
 };
 
 // ArgMorph preferences settings:
@@ -7792,9 +8197,11 @@ CommandSlotMorph.prototype.drawEdges = function (ctx) {
     ctx.lineTo(this.width() - shift, edge + this.corner);
     ctx.stroke();
 
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
-    ctx.shadowColor = this.rfColor.darker(80).toString();
+    if (useBlurredShadows) {
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+        ctx.shadowColor = this.rfColor.darker(80).toString();
+    }
 
     // left vertical side
     gradient = ctx.createLinearGradient(
@@ -7939,7 +8346,6 @@ function RingCommandSlotMorph() {
 RingCommandSlotMorph.prototype.init = function () {
     RingCommandSlotMorph.uber.init.call(this);
     this.color = new Color(0, 17, 173);
-    this.alpha = RingMorph.prototype.alpha;
     this.contrast = RingMorph.prototype.contrast;
 };
 
@@ -8527,11 +8933,13 @@ InputSlotMorph.prototype.init = function (
     choiceDict,
     isReadOnly
 ) {
-    var contents = new StringMorph(''),
+    var contents = new InputSlotStringMorph(''),
         arrow = new ArrowMorph(
             'down',
             0,
-            Math.max(Math.floor(this.fontSize / 6), 1)
+            Math.max(Math.floor(this.fontSize / 6), 1),
+            BLACK,
+            true
         );
 
     contents.fontSize = this.fontSize;
@@ -8548,7 +8956,7 @@ InputSlotMorph.prototype.init = function (
     this.constant = null;
 
     InputSlotMorph.uber.init.call(this, null, true);
-    this.color = new Color(255, 255, 255);
+    this.color = WHITE;
     this.add(contents);
     this.add(arrow);
     contents.isEditable = true;
@@ -8658,10 +9066,14 @@ InputSlotMorph.prototype.menuFromDict = function (
             this.fontSize
         );
 
-	function update (num) {
+	function update(num) {
     	myself.setContents(num);
         myself.reactToSliderEdit();
  	}
+
+    function getImg(block) {
+        return () => block.fullImage();
+    }
 
     if (choices instanceof Function) {
         choices = choices.call(this);
@@ -8679,7 +9091,10 @@ InputSlotMorph.prototype.menuFromDict = function (
             if (key[0] === '~') {
                 menu.addLine();
             } else if (key.indexOf('§_def') === 0) {
-                menu.addItem(choices[key].fullImage(), choices[key]);
+                menu.addItem(
+                    this.doWithAlpha(1, getImg(choices[key])),
+                    choices[key]
+                );
             } else if (key.indexOf('§_dir') === 0) {
 			    dial = new DialMorph();
     			dial.rootForGrab = function () {return this; };
@@ -8691,6 +9106,25 @@ InputSlotMorph.prototype.menuFromDict = function (
        			menu.addLine();
 			    menu.items.push(dial);
             	menu.addLine();
+            } else if (key.indexOf('§_') === 0) {
+                // prefixing a key with '§_' only makes the menu item
+                // appear when the user holds down the shift-key
+                // use with care because mobile devices might only
+                // have a "soft" keyboard that isn't always there
+                if (this.world().currentKey === 16) { // shift
+                    menu.addItem(
+                        key.slice(2),
+                        choices[key],
+                        null, // hint
+                        null, // color
+                        null, // bold
+                        true, // italic
+                        null, // doubleClickAction
+                        null, // shortcut
+                        !(choices[key] instanceof Array) &&
+                            typeof choices[key] !== 'function' // verbatim?
+                    );
+                }
             } else if (key === '__shout__go__') {
                 // show the green flag symbol
                 flag = new SymbolMorph('flag');
@@ -8727,7 +9161,8 @@ InputSlotMorph.prototype.menuFromDict = function (
                     null, // doubleClickAction
                     null, // shortcut
                     !(choices[key] instanceof Array) &&
-                        typeof choices[key] !== 'function' // verbatim?
+                        typeof choices[key] !== 'function' &&
+                            typeof(choices[key]) !== 'number' // verbatim?
                 );
             }
         }
@@ -9187,9 +9622,9 @@ InputSlotMorph.prototype.setChoices = function (dict, readonly) {
     if (this.parent instanceof BlockMorph) {
         this.parent.fixLabelColor();
         if (!readonly) {
-            cnts.shadowOffset = new Point();
+            cnts.shadowOffset = ZERO;
             cnts.shadowColor = null;
-            cnts.setColor(new Color(0, 0, 0));
+            cnts.setColor(BLACK);
         }
     }
     this.fixLayout();
@@ -9207,10 +9642,10 @@ InputSlotMorph.prototype.fixLayout = function () {
     contents.isEditable = (!this.isReadOnly);
     if (this.isReadOnly) {
         contents.disableSelecting();
-        contents.color = new Color(255, 255, 255);
+        contents.color = WHITE;
     } else {
         contents.enableSelecting();
-        contents.color = new Color(0, 0, 0);
+        contents.color = BLACK;
     }
 
     if (this.choices) {
@@ -9479,7 +9914,7 @@ InputSlotMorph.prototype.render = function (ctx) {
             this.drawRectBorder(ctx);
         }
     } else {
-        r = (this.height() - (this.edge * 2)) / 2;
+        r = Math.max((this.height() - (this.edge * 2)) / 2, 0);
         ctx.beginPath();
         ctx.arc(
             r + this.edge,
@@ -9507,7 +9942,7 @@ InputSlotMorph.prototype.render = function (ctx) {
 	// draw my "wish" block, if any
 	if (this.selectedBlock) {
  		ctx.drawImage(
-        	this.selectedBlock.fullImage(),
+        	this.doWithAlpha(1, () => this.selectedBlock.fullImage()),
             this.edge + this.typeInPadding,
             this.edge
         );
@@ -9523,9 +9958,11 @@ InputSlotMorph.prototype.drawRectBorder = function (ctx) {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
-    ctx.shadowColor = this.color.darker(80).toString();
+    if (useBlurredShadows) {
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+        ctx.shadowColor = this.color.darker(80).toString();
+    }
 
     gradient = ctx.createLinearGradient(
         0,
@@ -9593,7 +10030,7 @@ InputSlotMorph.prototype.drawRectBorder = function (ctx) {
 
 InputSlotMorph.prototype.drawRoundBorder = function (ctx) {
     var shift = this.edge * 0.5,
-        r = (this.height() - (this.edge * 2)) / 2,
+        r = Math.max((this.height() - (this.edge * 2)) / 2, 0),
         start,
         end,
         gradient;
@@ -9607,10 +10044,12 @@ InputSlotMorph.prototype.drawRoundBorder = function (ctx) {
     end = this.width() - r - this.edge;
     if (end > start) {
 
-        ctx.shadowOffsetX = shift;
-        ctx.shadowOffsetY = shift;
-        ctx.shadowBlur = this.edge;
-        ctx.shadowColor = this.color.darker(80).toString();
+        if (useBlurredShadows) {
+            ctx.shadowOffsetX = shift;
+            ctx.shadowOffsetY = shift;
+            ctx.shadowBlur = this.edge;
+            ctx.shadowColor = this.color.darker(80).toString();
+        }
 
         gradient = ctx.createLinearGradient(
             0,
@@ -9647,12 +10086,14 @@ InputSlotMorph.prototype.drawRoundBorder = function (ctx) {
     ctx.lineTo(this.width() - r - this.edge, this.height() - shift);
     ctx.stroke();
 
-    r = this.height() / 2;
+    r = Math.max(this.height() / 2, this.edge);
 
-    ctx.shadowOffsetX = shift;
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
-    ctx.shadowColor = this.color.darker(80).toString();
+    if (useBlurredShadows) {
+        ctx.shadowOffsetX = shift;
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+        ctx.shadowColor = this.color.darker(80).toString();
+    }
 
     // top edge: left corner
     gradient = ctx.createRadialGradient(
@@ -9705,6 +10146,102 @@ InputSlotMorph.prototype.drawRoundBorder = function (ctx) {
     );
     ctx.stroke();
 };
+
+// InputSlotStringMorph ///////////////////////////////////////////////
+
+/*
+    I am a piece of single-line text inside an input slot block. I serve as a
+    container for sharing typographic attributes among my instances
+*/
+
+// InputSlotStringMorph inherits from StringMorph:
+
+InputSlotStringMorph.prototype = new StringMorph();
+InputSlotStringMorph.prototype.constructor = InputSlotStringMorph;
+InputSlotStringMorph.uber = StringMorph.prototype;
+
+function InputSlotStringMorph(
+    text,
+    fontSize,
+    fontStyle,
+    bold,
+    italic,
+    isNumeric,
+    shadowOffset,
+    shadowColor,
+    color,
+    fontName
+) {
+    this.init(
+        text,
+        fontSize,
+        fontStyle,
+        bold,
+        italic,
+        isNumeric,
+        shadowOffset,
+        shadowColor,
+        color,
+        fontName
+    );
+}
+
+InputSlotStringMorph.prototype.getRenderColor = function () {
+    if (MorphicPreferences.isFlat) {
+        if (this.isEditable) {
+            return this.color;
+        }
+        return this.parent.alpha > 0.5 ? this.color : BLACK;
+    }
+    return this.parent.alpha > 0.25 ? this.color : WHITE;
+};
+
+InputSlotStringMorph.prototype.getShadowRenderColor = function () {
+    return this.parent.alpha > 0.25 ? this.shadowColor : CLEAR;
+};
+
+// InputSlotTextMorph ///////////////////////////////////////////////
+
+/*
+    I am a piece of multi-line text inside an input slot block. I serve as a
+    container for sharing typographic attributes among my instances
+*/
+
+// InputSlotTextMorph inherits from TextMorph:
+
+InputSlotTextMorph.prototype = new TextMorph();
+InputSlotTextMorph.prototype.constructor = InputSlotTextMorph;
+InputSlotTextMorph.uber = StringMorph.prototype;
+
+function InputSlotTextMorph(
+    text,
+    fontSize,
+    fontStyle,
+    bold,
+    italic,
+    alignment,
+    width,
+    fontName,
+    shadowOffset,
+    shadowColor
+) {
+    this.init(text,
+        fontSize,
+        fontStyle,
+        bold,
+        italic,
+        alignment,
+        width,
+        fontName,
+        shadowOffset,
+        shadowColor);
+}
+
+InputSlotTextMorph.prototype.getRenderColor =
+    InputSlotStringMorph.prototype.getRenderColor;
+
+InputSlotTextMorph.prototype.getShadowRenderColor =
+    InputSlotStringMorph.prototype.getShadowRenderColor;
 
 // TemplateSlotMorph ///////////////////////////////////////////////////
 
@@ -9879,6 +10416,7 @@ BooleanSlotMorph.prototype.init = function (initialValue) {
     this.isUnevaluated = false;
     this.progress = 0; // for animation state, not persisted
     BooleanSlotMorph.uber.init.call(this);
+    this.alpha = 1;
     this.fixLayout();
 };
 
@@ -10135,9 +10673,11 @@ BooleanSlotMorph.prototype.drawDiamond = function (ctx, progress) {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    ctx.shadowOffsetX = shift;
-    ctx.shadowBlur = shift;
-    ctx.shadowColor = 'black';
+    if (useBlurredShadows) {
+        ctx.shadowOffsetX = shift;
+        ctx.shadowBlur = shift;
+        ctx.shadowColor = 'black';
+    }
 
     // top edge: left corner
     gradient = ctx.createLinearGradient(
@@ -10156,9 +10696,11 @@ BooleanSlotMorph.prototype.drawDiamond = function (ctx, progress) {
     ctx.stroke();
 
     // top edge: straight line
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
+    if (useBlurredShadows) {
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+    }
 
     gradient = ctx.createLinearGradient(
         0,
@@ -10233,7 +10775,7 @@ BooleanSlotMorph.prototype.drawLabel = function (ctx) {
             x = this.width() - (this.height() / 2) - text.x;
         }
         ctx.save();
-        if (!MorphicPreferences.isFlat) {
+        if (!MorphicPreferences.isFlat && useBlurredShadows) {
             ctx.shadowOffsetX = -shift;
             ctx.shadowOffsetY = -shift;
             ctx.shadowBlur = shift;
@@ -10254,7 +10796,7 @@ BooleanSlotMorph.prototype.drawLabel = function (ctx) {
 
     // "tick:"
     x = r + (this.edge * 2) + shift;
-    if (!MorphicPreferences.isFlat) {
+    if (!MorphicPreferences.isFlat && useBlurredShadows) {
         ctx.shadowOffsetX = -shift;
         ctx.shadowOffsetY = -shift;
         ctx.shadowBlur = shift;
@@ -10272,7 +10814,7 @@ BooleanSlotMorph.prototype.drawLabel = function (ctx) {
 
     // "cross:"
     x = w - y - (this.edge * 2);
-    if (!MorphicPreferences.isFlat) {
+    if (!MorphicPreferences.isFlat && useBlurredShadows) {
         ctx.shadowOffsetX = -shift;
         ctx.shadowOffsetY = -shift;
         ctx.shadowBlur = shift;
@@ -10308,7 +10850,7 @@ BooleanSlotMorph.prototype.drawKnob = function (ctx, progress) {
     switch (this.value) {
     case false:
         x = r + slideStep;
-        if (!MorphicPreferences.isFlat) {
+        if (!MorphicPreferences.isFlat && useBlurredShadows) {
             ctx.shadowOffsetX = shift;
             ctx.shadowOffsetY = 0;
             ctx.shadowBlur = shift;
@@ -10329,7 +10871,7 @@ BooleanSlotMorph.prototype.drawKnob = function (ctx, progress) {
     default:
         if (!progress) {return; }
         x = r;
-        if (!MorphicPreferences.isFlat) {
+        if (!MorphicPreferences.isFlat && useBlurredShadows) {
             ctx.shadowOffsetX = shift;
             ctx.shadowOffsetY = 0;
             ctx.shadowBlur = shift;
@@ -10359,6 +10901,10 @@ BooleanSlotMorph.prototype.drawKnob = function (ctx, progress) {
     ctx.beginPath();
     ctx.arc(x, y, r - (outline / 2), radians(0), radians(360));
     ctx.stroke();
+
+    if (r < outline + this.edge) {
+        return;
+    }
 
     // top-left:
     gradient = ctx.createRadialGradient(
@@ -10447,17 +10993,18 @@ ArrowMorph.uber = Morph.prototype;
 
 // ArrowMorph instance creation:
 
-function ArrowMorph(direction, size, padding, color) {
-    this.init(direction, size, padding, color);
+function ArrowMorph(direction, size, padding, color, isBlockLabel) {
+    this.init(direction, size, padding, color, isBlockLabel);
 }
 
-ArrowMorph.prototype.init = function (direction, size, padding, color) {
+ArrowMorph.prototype.init = function (direction, size, padding, color, isLbl) {
     this.direction = direction || 'down';
     this.size = size || ((size === 0) ? 0 : 50);
     this.padding = padding || 0;
+    this.isBlockLabel = isLbl || false;
 
     ArrowMorph.uber.init.call(this);
-    this.color = color || new Color(0, 0, 0);
+    this.color = color || BLACK;
     this.bounds.setWidth(this.size);
     this.bounds.setHeight(this.size);
     this.rerender();
@@ -10482,7 +11029,7 @@ ArrowMorph.prototype.render = function (ctx) {
         w = this.width(),
         w2 = Math.floor(w / 2);
 
-    ctx.fillStyle = this.color.toString();
+    ctx.fillStyle = this.getRenderColor().toString();
     ctx.beginPath();
     if (this.direction === 'down') {
         ctx.moveTo(pad, h2);
@@ -10503,6 +11050,16 @@ ArrowMorph.prototype.render = function (ctx) {
     }
     ctx.closePath();
     ctx.fill();
+};
+
+ArrowMorph.prototype.getRenderColor = function () {
+    if (this.isBlockLabel) {
+        if (MorphicPreferences.isFlat) {
+            return this.color;
+        }
+        return SyntaxElementMorph.prototype.alpha > 0.5 ? this.color : WHITE;
+    }
+    return this.color;
 };
 
 // TextSlotMorph //////////////////////////////////////////////////////
@@ -10530,11 +11087,13 @@ TextSlotMorph.prototype.init = function (
     choiceDict,
     isReadOnly
 ) {
-    var contents = new TextMorph(''),
+    var contents = new InputSlotTextMorph(''),
         arrow = new ArrowMorph(
             'down',
             0,
-            Math.max(Math.floor(this.fontSize / 6), 1)
+            Math.max(Math.floor(this.fontSize / 6), 1),
+            BLACK,
+            true
         );
 
     contents.fontSize = this.fontSize;
@@ -10549,7 +11108,7 @@ TextSlotMorph.prototype.init = function (
     this.constant = null;
 
     InputSlotMorph.uber.init.call(this, null, null, null, null, true); // sil.
-    this.color = new Color(255, 255, 255);
+    this.color = WHITE;
     this.add(contents);
     this.add(arrow);
     contents.isEditable = true;
@@ -10563,7 +11122,7 @@ TextSlotMorph.prototype.init = function (
 
 TextSlotMorph.prototype.getSpec = function () {
     if (this.isNumeric) {
-        return '%mln';
+        return '%mlt';
     }
     return '%mlt'; // default
 };
@@ -10609,6 +11168,7 @@ function ColorSlotMorph(clr) {
 
 ColorSlotMorph.prototype.init = function (clr) {
     ColorSlotMorph.uber.init.call(this);
+    this.alpha = 1;
     this.setColor(clr || new Color(145, 26, 68));
 };
 
@@ -10862,7 +11422,8 @@ MultiArgMorph.prototype.init = function (
         'left',
         this.fontSize,
         Math.max(Math.floor(this.fontSize / 6), 1),
-        arrowColor
+        arrowColor,
+        true
     );
 
     // right arrow:
@@ -10870,7 +11431,8 @@ MultiArgMorph.prototype.init = function (
         'right',
         this.fontSize,
         Math.max(Math.floor(this.fontSize / 6), 1),
-        arrowColor
+        arrowColor,
+        true
     );
 
     // control panel:
@@ -11137,7 +11699,9 @@ MultiArgMorph.prototype.mouseClickLeft = function (pos) {
                 target.addInput();
             }
         }
-    } else if (leftArrow.bounds.containsPoint(pos)) {
+    } else if (
+        leftArrow.bounds.expandBy(this.fontSize / 3).containsPoint(pos)
+    ) {
         for (i = 0; i < repetition; i += 1) {
             if (leftArrow.isVisible) {
                 target.removeInput();
@@ -11327,7 +11891,7 @@ ArgLabelMorph.prototype.fixLayout = function () {
 
     if (this.parent) {
         this.color = this.parent.color;
-        shadowOffset = label.shadowOffset || new Point();
+        shadowOffset = label.shadowOffset || ZERO;
 
         // determine the shadow color for zebra coloring:
         if (shadowOffset.x < 0) {
@@ -11538,10 +12102,12 @@ FunctionSlotMorph.prototype.drawRounded = function (ctx) {
 
     // normal gradient edges
 
-    ctx.shadowOffsetX = shift;
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
-    ctx.shadowColor = this.color.darker(80).toString();
+    if (useBlurredShadows) {
+        ctx.shadowOffsetX = shift;
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+        ctx.shadowColor = this.color.darker(80).toString();
+    }
 
     // top edge: straight line
     gradient = ctx.createLinearGradient(
@@ -11692,10 +12258,12 @@ FunctionSlotMorph.prototype.drawDiamond = function (ctx) {
     // normal gradient edges
     // top edge: left corner
 
-    ctx.shadowOffsetX = shift;
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
-    ctx.shadowColor = this.color.darker(80).toString();
+    if (useBlurredShadows) {
+        ctx.shadowOffsetX = shift;
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+        ctx.shadowColor = this.color.darker(80).toString();
+    }
 
     gradient = ctx.createLinearGradient(
         0,
@@ -11885,7 +12453,6 @@ function RingReporterSlotMorph(isPredicate) {
 
 RingReporterSlotMorph.prototype.init = function (isPredicate) {
     RingReporterSlotMorph.uber.init.call(this, isPredicate, true);
-    this.alpha = RingMorph.prototype.alpha;
     this.contrast = RingMorph.prototype.contrast;
 };
 
@@ -12075,10 +12642,12 @@ RingReporterSlotMorph.prototype.drawEdgesOval = function (ctx) {
 
     // normal gradient edges
 
-    ctx.shadowOffsetX = shift;
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
-    ctx.shadowColor = this.color.darker(80).toString();
+    if (useBlurredShadows) {
+        ctx.shadowOffsetX = shift;
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+        ctx.shadowColor = this.color.darker(80).toString();
+    }
 
     // top edge: straight line
     gradient = ctx.createLinearGradient(
@@ -12229,10 +12798,12 @@ RingReporterSlotMorph.prototype.drawEdgesDiamond = function (ctx) {
     // normal gradient edges
     // top edge: left corner
 
-    ctx.shadowOffsetX = shift;
-    ctx.shadowOffsetY = shift;
-    ctx.shadowBlur = this.edge;
-    ctx.shadowColor = this.color.darker(80).toString();
+    if (useBlurredShadows) {
+        ctx.shadowOffsetX = shift;
+        ctx.shadowOffsetY = shift;
+        ctx.shadowBlur = this.edge;
+        ctx.shadowColor = this.color.darker(80).toString();
+    }
 
     gradient = ctx.createLinearGradient(
         0,
@@ -12412,6 +12983,22 @@ CommentMorph.prototype.toggleExpand = function () {
     this.isCollapsed = !this.isCollapsed;
     this.fixLayout();
     this.align();
+    if (!this.isCollapsed) {
+        this.comeToFront();
+    }
+};
+
+CommentMorph.prototype.comeToFront = function () {
+    if (this.parent) {
+        this.parent.add(this);
+        this.changed();
+    }
+};
+
+// CommentMorph events:
+
+CommentMorph.prototype.mouseClickLeft = function () {
+    this.comeToFront();
 };
 
 // CommentMorph layout:
@@ -12420,6 +13007,7 @@ CommentMorph.prototype.layoutChanged = function () {
     // react to a change of the contents area
     this.fixLayout();
     this.align();
+    this.comeToFront();
 };
 
 CommentMorph.prototype.fixLayout = function () {
@@ -12553,9 +13141,6 @@ CommentMorph.prototype.prepareToBeGrabbed = function (hand) {
     if (this.anchor) {
         this.anchor.destroy();
         this.anchor = null;
-        // fix shadow, because it was added earlier
-        this.removeShadow();
-        this.addShadow();
     }
 };
 
@@ -13487,9 +14072,6 @@ ScriptFocusMorph.prototype.reactToKeyEvent = function (key) {
 
     cb = new CommandBlockMorph();
     cb.setSpec('bool %b ?');
-
-    cm = new CommandBlockMorph();
-    cm.setSpec('month %month');
 
     cd = new CommandBlockMorph();
     cd.setSpec('direction %dir degrees');

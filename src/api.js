@@ -27,7 +27,7 @@
 
     prerequisites:
     --------------
-    needs gui.js and morphic.js
+    needs gui.js, lists.js and morphic.js
 
 
     documentation
@@ -53,6 +53,14 @@
             - IDE_Morph.prototype.getVarNames()
             - IDE_Morph.prototype.getVar()
             - IDE_Morph.prototype.setVar()
+
+        Create and Modify Lists
+
+            - IDE_Morph.prototype.newList()
+
+        Access the Serialized Project
+
+            - IDE_Morph.prototype.getProjectXML()
 
     Getting hold of an ide can usually be achieved by
     evaluating:
@@ -192,11 +200,11 @@
 
 */
 
-/*global modules, IDE_Morph, isString, Map*/
+/*global modules, IDE_Morph, isString, Map, List*/
 
 // Global stuff ////////////////////////////////////////////////////////
 
-modules.api = '2020-April-27';
+modules.api = '2020-October-20';
 
 // IDE_Morph external communication API - experimental
 /*
@@ -302,4 +310,14 @@ IDE_Morph.prototype.setVar = function (name, value) {
     // set the value of the global variable indicated by name to the given value
     // raise an error if no global variable of that name exists
     this.stage.globalVariables().setVar(name, value);
+};
+
+IDE_Morph.prototype.newList = function (array) {
+    // return a new Snap list the shape of the given array, if any
+    // nested array will not be automatically converted to nested lists
+    return new List(array);
+};
+
+IDE_Morph.prototype.getProjectXML = function () {
+    return this.serializer.serialize(this.stage);
 };
